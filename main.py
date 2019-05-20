@@ -6,7 +6,13 @@ Author: Dmitrii Khizbullin
 from typing import Union
 import numpy as np
 import math
-import sys
+
+
+def normal_up(plane):
+    if plane is not None:
+        if plane[2] < 0.0:
+            plane = -plane
+    return plane
 
 
 def plane_by_3_points(points: np.ndarray) -> Union[np.ndarray, None]:
@@ -36,9 +42,7 @@ def plane_by_3_points(points: np.ndarray) -> Union[np.ndarray, None]:
     # Normalize the direction of the plane for z to be upwards
     # Actually a plane can be defined by a z-downwards vector in a correct
     # way as well, but the test system seems to require Z to be positive
-    if plane is not None:
-        if plane[2] < 0.0:
-            plane = -plane
+    plane = normal_up(plane)
 
     return plane
 
@@ -59,11 +63,11 @@ def count_inliers(plane, param_p, points):
     normal = plane[0:3]
     d = plane[3]
     dot = np.dot(points, normal)
-    mask_left = dot >= d - param_p
-    mask_right = dot <= d + param_p
+    mask_left = dot + d >= - param_p
+    mask_right = dot + d <= param_p
     mask = np.logical_and(mask_left, mask_right)
-    num_inliers = np.sum(mask.astype(np.int))
-    return num_inliers
+    inliers = points[mask]
+    return inliers
 
 
 """
@@ -77,7 +81,7 @@ def extract_plane(points: np.ndarray, param_p: float):
     dimentionality = 3
     assert points.shape[-1] == dimentionality
     num_support_points = 3
-    success_prob = 1 - 1e-6
+    success_prob = 1 - 1e-4
 
     num_samples = math.ceil(
         math.log(1.0 - success_prob) /
@@ -98,21 +102,38 @@ def extract_plane(points: np.ndarray, param_p: float):
             if num_inline_triplets > num_samples*10:
                 break
             continue
-        num_inliers = count_inliers(hypot_plane, param_p, points)
+        inliers = count_inliers(hypot_plane, param_p, points)
+        num_inliers = len(inliers)
         if best is None or num_inliers > best['num_inliers']:
             best = {'num_inliers': num_inliers, 'plane': hypot_plane}
-            #print("num_inliers=", num_inliers, " - ", num_inliers/len(points), " - ", num_valid_planes)
 
         num_valid_planes += 1
         if num_valid_planes >= num_samples:
             break
         pass
 
-    #print(num_inline_triplets, num_valid_planes, num_samples)
-
     best_plane = best['plane'] if best is not None else None
 
     return best_plane
+
+
+def plane_to_str(plane):
+    return " ".join(["{:.6f}".format(v) for v in plane])
+
+
+def refine_plane_pca(points, param_p, plane):
+    inliers = count_inliers(plane, param_p, points)
+    if len(inliers) == 0:
+        return plane
+    mean = np.mean(inliers, axis=0)
+    x_std = inliers - mean
+    cov = np.cov(x_std.T)
+    ev, eig = np.linalg.eig(cov)
+    plane_normal = eig[np.argmin(ev)]
+    d = np.dot(mean, plane_normal)
+    refined_plane = np.concatenate((plane_normal, np.array((d,))), axis=0)
+    refined_plane = normal_up(refined_plane)
+    return refined_plane
 
 
 def analyse(case_file_path, result_file_path=None, print_to_stdout=True):
@@ -124,8 +145,12 @@ def analyse(case_file_path, result_file_path=None, print_to_stdout=True):
     # Running RANSAC
     plane = extract_plane(points, param_p)
 
+    if False:
+        print("Before refinement:", plane_to_str(plane))
+        plane = refine_plane_pca(points, param_p, plane)
+
     # Saving result
-    result_str = " ".join(["{:.6f}".format(v) for v in plane])
+    result_str = plane_to_str(plane)
 
     if print_to_stdout:
         print(result_str)
