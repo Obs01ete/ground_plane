@@ -77,25 +77,38 @@ def extract_plane(points: np.ndarray, param_p: float):
     dimentionality = 3
     assert points.shape[-1] == dimentionality
     num_support_points = 3
-    success_prob = 0.99
+    success_prob = 1 - 1e-6
 
     num_samples = math.ceil(
-        math.log(1.0 - success_prob) / \
+        math.log(1.0 - success_prob) /
         math.log(1 - inlier_fraction ** num_support_points))
 
     best = None
-    for i in range(num_samples):
+    num_inline_triplets = 0
+    num_valid_planes = 0
+    while True:
         indices = np.arange(len(points))
         np.random.shuffle(indices)
         indices_3 = indices[:num_support_points]
         support = np.take(points, indices_3, axis=0)
         hypot_plane = plane_by_3_points(support)
         if hypot_plane is None:
+            num_inline_triplets += 1
+            # If too many points organized in a line, sample 10 times more
+            if num_inline_triplets > num_samples*10:
+                break
             continue
         num_inliers = count_inliers(hypot_plane, param_p, points)
         if best is None or num_inliers > best['num_inliers']:
             best = {'num_inliers': num_inliers, 'plane': hypot_plane}
+            #print("num_inliers=", num_inliers, " - ", num_inliers/len(points), " - ", num_valid_planes)
+
+        num_valid_planes += 1
+        if num_valid_planes >= num_samples:
+            break
         pass
+
+    #print(num_inline_triplets, num_valid_planes, num_samples)
 
     best_plane = best['plane'] if best is not None else None
 
