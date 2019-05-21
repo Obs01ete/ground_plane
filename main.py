@@ -129,8 +129,8 @@ def refine_plane_pca(points, param_p, plane):
     x_std = inliers - mean
     cov = np.cov(x_std.T)
     ev, eig = np.linalg.eig(cov)
-    plane_normal = eig[np.argmin(ev)]
-    d = np.dot(mean, plane_normal)
+    plane_normal = eig[:, np.argmin(ev)]
+    d = -np.dot(mean, plane_normal)
     refined_plane = np.concatenate((plane_normal, np.array((d,))), axis=0)
     refined_plane = normal_up(refined_plane)
     return refined_plane
@@ -145,8 +145,9 @@ def analyse(case_file_path, result_file_path=None, print_to_stdout=True):
     # Running RANSAC
     plane = extract_plane(points, param_p)
 
-    if False:
-        print("Before refinement:", plane_to_str(plane))
+    if True:
+        # print("Before refinement:")
+        # print(plane_to_str(plane))
         plane = refine_plane_pca(points, param_p, plane)
 
     # Saving result
