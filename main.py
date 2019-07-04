@@ -164,7 +164,7 @@ def analyse(case_file_path, result_file_path=None, print_to_stdout=True):
 
 
 def main():
-    debug_mode = False
+    debug_mode = True
 
     if debug_mode:
         if True:
